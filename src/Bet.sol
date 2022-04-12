@@ -101,6 +101,11 @@ contract BetContract {
         );
         require(optionId == 1 || optionId == 2, "Option does not exist");
         require(msg.sender != betList[id].dealer, "Cannot join own bet");
+        require(
+            playersToBetAmount[msg.sender][id] == 0,
+            "You have already joined this bet"
+        );
+        require(msg.value > 0, "You have no ether to join");
 
         if (optionId == 1) {
             betList[id].option1.players.push(msg.sender);
@@ -158,21 +163,17 @@ contract BetContract {
         uint256 winnersOptionTotalAmount,
         uint256 losersOptionTotalAmount,
         uint256 playerBetAmount
-    ) internal pure returns (uint256) {
+    ) internal pure returns (uint256 playerTotal, uint256 playerGain) {
         uint256 playerPercentage = (playerBetAmount /
             winnersOptionTotalAmount) * 100;
-        uint256 playerGain = (playerPercentage * losersOptionTotalAmount) / 100;
-        uint256 playerTotal = playerBetAmount + playerGain;
-        return playerTotal;
+        playerGain = (playerPercentage * losersOptionTotalAmount) / 100;
+        playerTotal = playerBetAmount + playerGain;
+        return (playerTotal, playerGain);
     }
 
     function claimGains(uint256 id) external {
         require(id <= betList.length, "Bet does not exist");
         require(betList[id].status == BetStatus.Ended, "Bet is not over yet");
-        require(
-            betList[id].dealer == msg.sender,
-            "Only the dealer can get gains"
-        );
         require(
             playersToBetAmount[msg.sender][id] > 0,
             "Player did not participate in this bet"
@@ -183,7 +184,7 @@ contract BetContract {
         if (bet.result == 1) {
             uint256 winningAmountTotal = bet.option1.totalAmount;
             require(winningAmountTotal > 0, "No money to send");
-            uint256 totalToSend = calculateGains(
+            (uint256 totalToSend, uint256 gains) = calculateGains(
                 winningAmountTotal,
                 bet.option2.totalAmount,
                 playersToBetAmount[msg.sender][id]
@@ -198,10 +199,11 @@ contract BetContract {
             emit GainsSent(msg.sender, totalToSend, data);
 
             bet.option1.totalAmount -= totalToSend;
+            bet.option2.totalAmount -= gains;
         } else {
             uint256 winningAmountTotal = bet.option2.totalAmount;
             require(winningAmountTotal > 0, "No money to send");
-            uint256 totalToSend = calculateGains(
+            (uint256 totalToSend, uint256 gains) = calculateGains(
                 winningAmountTotal,
                 bet.option1.totalAmount,
                 playersToBetAmount[msg.sender][id]
@@ -216,6 +218,7 @@ contract BetContract {
             emit GainsSent(msg.sender, totalToSend, data);
 
             bet.option2.totalAmount -= totalToSend;
+            bet.option1.totalAmount -= gains;
         }
     }
 }
