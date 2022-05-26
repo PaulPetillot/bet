@@ -10,7 +10,7 @@ contract BetContract {
     event PaymentSent(address recipient, uint256 amount, bytes data);
     event BetJoined(address indexed player, uint256 id, string optionTitle);
     event GainsSent(address indexed player, uint256 amount, bytes data);
-
+    event showBets(uint256[] betIds);
     enum BetStatus {
         Open,
         Pending,
@@ -35,6 +35,8 @@ contract BetContract {
     }
 
     mapping(address => mapping(uint256 => uint256)) public playersToBetAmount;
+    mapping(address => uint256) public playerBetCount;
+    mapping(address => uint256[]) public playerBets;
     Bet[] public betList;
 
     function createBet(
@@ -51,7 +53,7 @@ contract BetContract {
         option2.id = 2;
 
         betList.push(
-            Bet(msg.sender, id, betName, option1, option2, BetStatus.Open)
+            Bet(msg.sender, 0, betName, option1, option2, BetStatus.Open)
         );
 
         emit BetCreated(betName, id, option1Name, option2Name);
@@ -64,6 +66,10 @@ contract BetContract {
         betList[id].status = BetStatus.Cancelled;
 
         emit BetCancelled(id);
+    }
+
+    function getBestListLength() public view returns (uint256 length) {
+        return betList.length;
     }
 
     function getRefund(uint256 id) external {
@@ -93,7 +99,7 @@ contract BetContract {
         emit RefundSent(msg.sender, amount, data);
     }
 
-    function joinBet(uint256 id, uint256 optionId) external payable {
+    function joinBet(uint256 id, uint8 optionId) external payable {
         require(id <= betList.length, "Bet does not exist");
         require(
             betList[id].status == BetStatus.Open,
@@ -111,14 +117,59 @@ contract BetContract {
             betList[id].option1.players.push(msg.sender);
             betList[id].option1.totalAmount += msg.value;
             playersToBetAmount[msg.sender][id] = msg.value;
+            playerBets[msg.sender].push(id);
             emit BetJoined(msg.sender, id, betList[id].option1.title);
         } else {
             betList[id].option2.players.push(msg.sender);
             betList[id].option2.totalAmount += msg.value;
             playersToBetAmount[msg.sender][id] = msg.value;
+            playerBets[msg.sender].push(id);
             emit BetJoined(msg.sender, id, betList[id].option2.title);
         }
     }
+
+    function getPlayerBets(address player)
+        public
+        view
+        returns (uint256[] memory betIds)
+    {
+        return playerBets[player];
+    }
+
+    //TODO: playerToAmount to optimize
+    // function getPlayerBets(address player)
+    //     public
+    //     view
+    //     returns (uint256[] memory allPlayerBets)
+    // {
+    //     uint256 i = 0;
+    //     uint256[] memory bets = new uint256[](playerBetCount[player]);
+
+    //     for (uint256 id = 0; id < betList.length; id++) {
+    //         for (
+    //             uint256 playerId = 0;
+    //             playerId < betList[id].option1.players.length;
+    //             playerId++
+    //         ) {
+    //             if (betList[id].option1.players[playerId] == player) {
+    //                 bets[i] = id;
+    //                 i++;
+    //             }
+    //         }
+
+    //         for (
+    //             uint256 playerId = 0;
+    //             playerId < betList[id].option2.players.length;
+    //             playerId++
+    //         ) {
+    //             if (betList[id].option2.players[playerId] == player) {
+    //                 bets[i] = id;
+    //                 i++;
+    //             }
+    //         }
+    //     }
+    //     return bets;
+    // }
 
     function closeBet(uint256 id) external {
         require(id <= betList.length, "Bet does not exist");
